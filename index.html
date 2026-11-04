@@ -548,6 +548,12 @@ html.fill .card-rail { padding-left: calc(50% - 200px); padding-right: calc(50% 
 .pos-qr .qr-box { margin: 6px auto 10px; max-width: 220px; }
 .pos-qr .btn { margin: 8px 0 12px; }
 
+/* ── limits ── */
+.limit-val { display: flex; flex-direction: column; align-items: center; padding: 6px 0 2px; }
+.limit-val b { font-size: 32px; font-weight: 750; } .limit-val small { color: var(--muted); font-size: 13px; }
+.limit-ends { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: -8px; }
+.limit-bar { padding: 0 16px 12px 68px; } .limit-bar .bar { margin: 0; }
+
 </style>
 </head>
 <body>
@@ -13339,7 +13345,7 @@ function canDebit(accId, amt, { transfer } = {}) {
   if (!a) return 'Choose an account.';
   if (!(amt > 0)) return 'Enter a valid amount.';
   if (amt > spendable(a)) return `Insufficient funds. Available: ${moneyT(spendable(a))}`;
-  if (transfer && outToday() + amt > ADM.dailyLimit) return `This exceeds your daily transfer limit of ${moneyT(ADM.dailyLimit)}. Remaining today: ${moneyT(Math.max(0, ADM.dailyLimit - outToday()))}`;
+  if (transfer && outToday() + amt > transferLimit()) return `This exceeds your daily transfer limit of ${moneyT(transferLimit())}. Remaining today: ${moneyT(Math.max(0, transferLimit() - outToday()))}`;
   return '';
 }
 function notify(title, body, icon = 'bell', silent = false) {
@@ -14079,7 +14085,7 @@ S.account = {
         ${a.type === 'deposit' ? `<div class="acc-head-row"><span>${a.rate}% p.a. · ${a.term} months</span><span>Matures ${fmtDate(a.maturity)}</span></div>` : ''}</div>`;
     }
     const acts = a.type === 'credit' ? [['send', 'Pay card', 'payCard'], ['card', 'Card', 'cardsTab'], ['file', 'Statement', 'statement']]
-      : a.type === 'goal' ? [['plus', 'Add money', 'goalAdd'], ['minus', 'Withdraw', 'goalOut'], ['trash', 'Close goal', 'goalClose']]
+      : a.type === 'goal' ? [['plus', 'Add money', 'goalAdd'], ['minus', 'Withdraw', 'goalOut'], ['target', 'Edit target', 'goalEdit'], ['trash', 'Close goal', 'goalClose']]
       : a.type === 'deposit' ? [['file', 'Certificate', 'cert'], ['x', 'Break deposit', 'depBreak']]
       : [['send', 'Transfer', 'xfer'], ['qr', 'Receive', 'recv'], ['file', 'Statement', 'statement'], ['id', 'IBAN letter', 'cert']];
     return hdr(a.name) + scr(`${head}
@@ -14107,7 +14113,7 @@ S.account = {
       cert: () => nav.go('cert', { id }),
       payCard: () => nav.go('own', { to: 'cc' }),
       cardsTab: () => nav.root('cards'),
-      goalAdd: () => goalMove(a, 1), goalOut: () => goalMove(a, -1), goalClose: () => goalClose(a),
+      goalAdd: () => goalMove(a, 1), goalOut: () => goalMove(a, -1), goalClose: () => goalClose(a), goalEdit: () => goalTarget(a),
       depBreak: () => depositBreak(a),
     });
   },
@@ -14276,14 +14282,13 @@ S.pay = {
         ${row({ ic: 'repeat', title: 'Standing orders', sub: `${DB.orders.length} active`, go: 'orders' })}
         ${row({ ic: 'qr', title: 'Receive money', sub: 'Show your QR to get paid', go: 'receive' })}
         ${row({ ic: 'nfc', color: '#b45309', title: 'Accept card payments', sub: 'Turn this phone into a POS terminal', go: 'pos' })}
-        ${row({ ic: 'sliders', title: 'Transfer limits', sub: `${moneyT(ADM.dailyLimit - outToday())} left today`, act: 'limits' })}
+        ${row({ ic: 'sliders', title: 'Limits & budgets', sub: `${moneyT(Math.max(0, transferLimit() - outToday()))} of transfers left today`, go: 'limits' })}
       </div>
       <div class="foot-space"></div></div>`;
   },
   mount(el) {
     bind(el, {
       ben: (b) => benSheet(DB.bens.find((x) => x.id === b.dataset.id)),
-      limits: () => ui.alert('Daily transfer limit', `Your daily limit for transfers to other people is <b>${moneyT(ADM.dailyLimit)}</b>.<br>Used today: ${moneyT(outToday())}.<br><br>To change it, visit any NWB branch.`),
     });
   },
 };
@@ -15424,7 +15429,7 @@ S.services = {
       ${sec('Save & grow')}<div class="svc-grid">${T('target', 'Savings goal', 'newGoal', '#0891b2')}${T('clock', 'Time deposit', 'newDeposit', 'var(--brand)')}${T('wallet', 'Open account', 'openAccount')}${T('pie', 'Insights', 'insights', '#7c3aed')}</div>
       ${sec('Financing')}<div class="svc-grid">${T('brief', 'Personal finance', 'loanApply', '#9333ea')}${T('file', 'My finance', 'loans', '#9333ea')}${T('calc', 'Finance calculator', 'loanApply', '#6d28d9')}${T('card', 'Pay card', 'own', '#1d4ed8')}</div>
       ${sec('Pay, get paid & cash')}<div class="svc-grid">${T('cash', 'Cardless cash', 'cardless', '#65a30d')}${T('gift', 'Redeem voucher', 'voucher', '#db2777')}${T('nfc', 'Tap to pay', 'tapPay', 'var(--brand)')}${T('cash', 'POS terminal', 'pos', '#b45309')}${T('qr', 'Receive (QR)', 'receive', '#7c3aed')}${T('receipt', 'NWB Pay receipts', 'p2pHistory', '#7c3aed')}</div>
-      ${sec('Tools')}<div class="svc-grid">${T('globe', 'Exchange rates', 'fx', '#0284c7')}${T('coins', 'Zakat calculator', 'zakat', 'var(--brand)')}${T('file', 'Statements', 'statement', '#475569')}${T('id', 'IBAN letter', 'cert', '#475569')}</div>
+      ${sec('Tools')}<div class="svc-grid">${T('globe', 'Exchange rates', 'fx', '#0284c7')}${T('coins', 'Zakat calculator', 'zakat', 'var(--brand)')}${T('file', 'Statements', 'statement', '#475569')}${T('id', 'IBAN letter', 'cert', '#475569')}${T('sliders', 'Limits & budgets', 'limits', 'var(--brand)')}</div>
       ${sec('Help')}<div class="svc-grid">${T('chat', 'Chat with us', 'chat', '#ea580c')}${T('pin', 'Branches & ATMs', 'branches', '#dc2626')}${T('help', 'Help centre', 'help', '#ca8a04')}${T('user', 'My profile', 'profile', 'var(--brand)')}</div>
       <div class="foot-space"></div></div>`;
   },
@@ -15688,7 +15693,7 @@ S.cardless = {
   render: () => {
     const active = DB.cardless.filter((c) => new Date(c.exp) > new Date());
     return hdr('Cardless withdrawal') + scr(`<p class="muted small">Get a one-time code and collect cash from any NWB ATM or teller — no card needed. Money is held from your account straight away.</p>
-      <div class="form">${field('Amount', amountInp(), { name: 'amount', hint: 'Multiples of SAR 50, up to SAR 5,000' })}
+      <div class="form">${field('Amount', amountInp(), { name: 'amount', hint: `Multiples of SAR 50, up to ${moneyT(cardlessMax())}` })}
       <div class="chips quick">${[100, 200, 500, 1000].map((v) => `<button class="chip" data-v="${v}">${v}</button>`).join('')}</div>
       <button class="btn btn-primary btn-block" data-act="go">Get withdrawal code</button></div>
       ${active.length ? sec('Active codes') + `<div class="list card">${active.map((c) => row({ ic: 'cash', color: '#65a30d', title: money(c.amt), sub: `Expires ${fmtTime(c.exp)} · ${c.code.slice(0, 11)}…`, go: 'cardlessCode', p: { code: c.code } })).join('')}</div>` : ''}`, 'pad');
@@ -15698,7 +15703,7 @@ S.cardless = {
     bind(el, {
       go: async () => {
         const amt = parseAmount(val(el, 'amount'));
-        if (!(amt > 0) || amt % 5000 || amt > 500000) return setErr(el, 'amount', 'Enter a multiple of SAR 50, up to SAR 5,000');
+        if (!(amt > 0) || amt % 5000 || amt > cardlessMax()) return setErr(el, 'amount', `Enter a multiple of SAR 50, up to ${moneyT(cardlessMax())}`);
         const err = canDebit('cur', amt); if (err) return setErr(el, 'amount', err);
         if (!(await authorize({ what: 'Cardless withdrawal', amount: amt, otpText: 'a cardless withdrawal' }))) return;
         const code = makeCode('ATM', myId(), amt, rnd(1 << 20));
@@ -15754,7 +15759,7 @@ S.help = {
     const faqs = [
       ['How do I pay someone with NWB Pay?', 'Ask them to open <b>Receive</b> and show their QR. Tap the scan button, scan it, approve with your PIN. Then show them your receipt QR so their phone can receive the money.'],
       ['What if my card is lost?', 'Go to <b>Cards → Report lost or stolen</b>. Your card is blocked instantly and a replacement is ordered. You can also <b>Freeze</b> it temporarily.'],
-      ['What is the daily transfer limit?', `Transfers to other people are limited to ${moneyT(ADM.dailyLimit)} per day. Transfers between your own accounts have no limit.`],
+      ['What is the daily transfer limit?', `Transfers to other people are limited to ${moneyT(transferLimit())} per day. You can change it in Profile → Limits & budgets. Transfers between your own accounts have no limit.`],
       ['How much does a transfer cost?', `Instant local transfers cost ${moneyT(INSTANT_FEE)} including VAT. Standard transfers are free. International transfers cost ${moneyT(INTL_FEE)}.`],
       ['I forgot my PIN', 'On the sign-in screen tap <b>Forgot PIN?</b> and verify with your National ID and year of birth (see Profile → Personal information).'],
       ['Will NWB ever ask for my OTP?', 'Never. NWB staff will never ask for your PIN, password or one-time code. If someone does, it is fraud.'],
@@ -15769,7 +15774,7 @@ const BOT = [
   [/lost|stolen|steal/, 'I\'m sorry to hear that. Go to <b>Cards → Report lost or stolen</b> to block it instantly. Want me to take you there?', 'cards'],
   [/freeze|block/, 'You can freeze and unfreeze any card from the <b>Cards</b> tab. Freezing is temporary; reporting lost blocks it permanently.', 'cards'],
   [/fee|charge|cost/, () => `Instant local transfers: ${moneyT(INSTANT_FEE)}. Standard: free. International: ${moneyT(INTL_FEE)}. NWB Pay (QR) and own-account transfers are free.`],
-  [/limit/, () => `Your daily transfer limit is ${moneyT(ADM.dailyLimit)}. Card limits can be changed in Cards → Controls.`],
+  [/limit/, () => `Your daily transfer limit is ${moneyT(transferLimit())}. You can change it, your budget and your credit limit in Profile → Limits & budgets.`],
   [/loan|financ|borrow/, 'You can get personal finance up to SAR 250,000 with instant approval. Monthly installment is capped at 33% of your salary.', 'loanApply'],
   [/qr|nwb pay|scan|receive|request/, 'For NWB Pay: the person receiving shows their QR (Payments → Receive money), you scan & approve, then they scan your receipt QR. Works without internet!', 'receive'],
   [/iban|account number/, () => `Your Current Account IBAN is <b>${fmtIban(acct('cur').iban)}</b>. You can copy it from the account screen or get an IBAN letter.`, 'cert'],
@@ -15854,6 +15859,129 @@ S.cert = {
   },
 };
 
+// ==== 82-limits.js ====
+// ───────────────────────── limits & budgets ─────────────────────────
+// Customers can tune their own limits. The organizer's daily transfer limit stays the ceiling,
+// so an event can still cap everyone; credit limits are capped at 5× salary (max SAR 200,000).
+const transferLimit = () => Math.min(DB.settings.transferLimit || ADM.dailyLimit, ADM.dailyLimit);
+const cardlessMax = () => DB.settings.cardlessMax || 500000;
+const ccMax = () => Math.max(acct('cc') ? acct('cc').limit : 0, Math.min(20000000, Math.round((DB.profile.salary * 5) / 100000) * 100000));
+const step1k = (h) => Math.round(h / 100000) * 100000;
+
+// one editor for every limit: slider + exact amount, raised limits need the SMS code
+function limitSheet({ title, sub, min, max, step, value, unit = 'per day', onSave }) {
+  const clampV = (v) => clamp(Math.round(v / step) * step, min, max);
+  const l = ui.sheet(`<div class="form limit-ed">
+      ${sub ? `<p class="muted small">${sub}</p>` : ''}
+      <div class="limit-val"><b data-out="v">${money(value)}</b><small>${unit}</small></div>
+      <input type="range" name="r" min="${min}" max="${max}" step="${step}" value="${value}">
+      <div class="limit-ends"><span>${money(min, { dp: 0 })}</span><span>${money(max, { dp: 0 })}</span></div>
+      ${field('Or type an amount', amountInp('v', (value / 100).toFixed(0)), { name: 'v' })}
+      <button class="btn btn-primary btn-block" data-act="save">Save</button></div>`, {
+    title,
+    mount: (w) => {
+      const r = $('[name=r]', w), t = $('[name=v]', w), out = $('[data-out=v]', w);
+      r.addEventListener('input', () => { out.innerHTML = money(+r.value); t.value = (+r.value / 100).toFixed(0); });
+      t.addEventListener('input', () => { const v = parseAmount(t.value); if (v > 0) { r.value = clampV(v); out.innerHTML = money(clampV(v)); } });
+    },
+    act: {
+      save: async () => {
+        const v = parseAmount(val(l.el, 'v'));
+        if (!(v > 0)) return setErr(l.el, 'v', 'Enter an amount');
+        if (v < min || v > max) return setErr(l.el, 'v', `Choose between ${moneyT(min)} and ${moneyT(max)}`);
+        const nv = clampV(v);
+        l.close();
+        if (nv === value) return;
+        const up = nv > value;
+        if (!(await authorize({ what: `${up ? 'Increase' : 'Lower'} ${title.toLowerCase()} to ${moneyT(nv)}`, noOtp: !up, otpText: `raising your ${title.toLowerCase()}` }))) return;
+        await onSave(nv, up);
+        save(); nav.refresh();
+      },
+    },
+  });
+}
+
+S.limits = {
+  render: () => {
+    const cc = acct('cc'), goals = DB.accounts.filter((a) => a.type === 'goal');
+    const used = outToday(), tl = transferLimit();
+    return hdr('Limits & budgets') + scr(`
+      <p class="muted small">Raise or lower your limits anytime. Increases are confirmed with an SMS code.</p>
+      ${sec('Transfers')}
+      <div class="list card">
+        ${row({ ic: 'send', title: 'Daily transfer limit', sub: `${moneyT(used)} used today · bank maximum ${moneyT(ADM.dailyLimit)}`, right: money(tl, { dp: 0 }), act: 'transfer' })}
+        <div class="limit-bar"><div class="bar"><i style="width:${clamp(used / tl, 0, 1) * 100}%" class="${used >= tl ? 'hot' : ''}"></i></div></div>
+      </div>
+      ${sec('Spending')}
+      <div class="list card">
+        ${row({ ic: 'pie', title: 'Monthly budget', sub: 'Shown on Home and in Spending insights', right: money(DB.settings.budget || 600000, { dp: 0 }), act: 'budget' })}
+      </div>
+      ${cc ? `${sec('Credit card')}
+      <div class="list card">
+        ${row({ ic: 'card', title: 'Credit limit', sub: `Outstanding ${moneyT(-Math.min(0, cc.balance))} · up to ${moneyT(ccMax())}`, right: money(cc.limit, { dp: 0 }), act: 'credit' })}
+      </div>` : ''}
+      ${sec('Cards')}
+      <div class="list card">
+        ${DB.cards.filter((c) => c.status !== 'blocked').map((c) => row({ ic: c.kind === 'virtual' ? 'globe' : 'card', title: `${esc(c.name)} ${maskCard(c.no)}`, sub: `Purchases ${moneyT(c.limits.pos)}/day${c.kind !== 'virtual' ? ` · ATM ${moneyT(c.limits.atm)}/day` : ''}`, go: 'cardLimits', p: { id: c.id } })).join('')}
+      </div>
+      ${sec('Cash')}
+      <div class="list card">
+        ${row({ ic: 'cash', color: '#65a30d', title: 'Cardless withdrawal limit', sub: 'Most you can take out per code', right: money(cardlessMax(), { dp: 0 }), act: 'cardless' })}
+      </div>
+      ${goals.length ? `${sec('Savings goals')}
+      <div class="list card">
+        ${goals.map((g) => row({ ic: g.gi || 'target', color: '#0891b2', title: esc(g.name), sub: `${moneyT(g.balance)} saved`, right: money(g.target, { dp: 0 }), rsub: 'target', act: 'goal', data: `data-id="${g.id}"` })).join('')}
+      </div>` : ''}
+      <div class="foot-space"></div>`, 'pad');
+  },
+  mount(el) {
+    bind(el, {
+      transfer: () => limitSheet({
+        title: 'Daily transfer limit', sub: 'Applies to local, international and NWB Pay transfers to other people.',
+        min: Math.min(100000, ADM.dailyLimit), max: ADM.dailyLimit, step: 100000, value: transferLimit(),
+        onSave: (v) => { DB.settings.transferLimit = v; notify('Transfer limit changed', `Your daily transfer limit is now ${moneyT(v)}.`, 'sliders', true); ui.toast('Transfer limit updated'); },
+      }),
+      budget: () => limitSheet({
+        title: 'Monthly budget', sub: 'Track card and bill spending against this each month.', unit: 'per month',
+        min: 50000, max: 10000000, step: 10000, value: DB.settings.budget || 600000,
+        onSave: (v) => { DB.settings.budget = v; ui.toast('Budget updated'); },
+      }),
+      credit: () => {
+        const cc = acct('cc'), owed = -Math.min(0, cc.balance);
+        limitSheet({
+          title: 'Credit limit', sub: `It can't go below what you owe (${moneyT(owed)}). Increases are reviewed instantly against your salary.`, unit: 'credit limit',
+          min: Math.max(100000, Math.ceil(owed / 100000) * 100000), max: ccMax(), step: 100000, value: cc.limit,
+          onSave: async (v, up) => {
+            if (up) { const ld = ui.loading('Reviewing your request…'); await sleep(1200); ld.done(); }
+            cc.limit = v;
+            notify(up ? 'Credit limit increased' : 'Credit limit lowered', `Your Platinum Credit Card limit is now ${moneyT(v)}.`, 'card', true);
+            ui.toast(up ? 'Approved — limit increased' : 'Credit limit lowered');
+          },
+        });
+      },
+      cardless: () => limitSheet({
+        title: 'Cardless withdrawal limit', unit: 'per code', min: 50000, max: 1000000, step: 50000, value: cardlessMax(),
+        onSave: (v) => { DB.settings.cardlessMax = v; ui.toast('Cardless limit updated'); },
+      }),
+      goal: (b) => goalTarget(acct(b.dataset.id)),
+    });
+  },
+};
+
+function goalTarget(g) {
+  if (!g) return;
+  const l = ui.sheet(`<div class="form">${field('New target', amountInp('t', (g.target / 100).toFixed(0)), { name: 't', hint: `${moneyT(g.balance)} saved so far` })}<button class="btn btn-primary btn-block" data-act="ok">Save target</button></div>`, {
+    title: `Target · ${esc(g.name)}`,
+    act: {
+      ok: () => {
+        const v = parseAmount(val(l.el, 't'));
+        if (!(v >= 10000)) return setErr(l.el, 't', 'Minimum target is SAR 100');
+        g.target = v; save(); l.close(); nav.refresh(); ui.toast('Goal target updated');
+      },
+    },
+  });
+}
+
 // ==== 85-profile.js ====
 // ───────────────────────── profile & settings ─────────────────────────
 S.profile = {
@@ -15863,6 +15991,7 @@ S.profile = {
       <div class="list card">
         ${row({ ic: 'id', title: 'Personal information', go: 'personal' })}
         ${row({ ic: 'shield', title: 'Security', sub: 'PIN, fingerprint, auto-lock', go: 'security' })}
+        ${row({ ic: 'sliders', title: 'Limits & budgets', sub: 'Transfers, budget, credit limit, cards', go: 'limits' })}
         ${sw('darkmode', isDark(), 'Dark mode', DB.settings.theme === 'system' ? 'Following your phone' : 'Set manually')}
         ${row({ ic: 'sun', title: 'Appearance', sub: 'Theme & currency display', go: 'appearance' })}
         ${row({ ic: 'bell', title: 'Notifications', go: 'notifSettings' })}
